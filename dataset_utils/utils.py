@@ -26,7 +26,31 @@ def make_fc_edge_idx(num_nodes):
     )
 
 
-def generate_graphs(state_vars, wall_thresh=0.3, gt_edges=None):
+def make_edge_and_nodes(pos, pos_norm, vel, edge_index, eps=1e-16, wall_thresh=0.3):
+    """
+    generates edge and node features from position
+    """
+    # node features (velocity unit vector and distance to wall with threshold)
+    dist_from_wall = np.ones_like(pos_norm) - pos_norm
+    dist_from_wall_thresh = np.where(dist_from_wall < wall_thresh, pos_norm, 0.)
+    heading = vel / (np.linalg.norm(vel, axis=1, keepdims=True) + eps)
+    node_feats = torch.tensor(
+        np.append(heading, dist_from_wall_thresh[:,None], axis=1),
+        dtype=torch.float
+    )
+
+    # making edge features
+    rel_pos = pos[edge_index[0]] - pos[edge_index[1]]
+    rel_pos_norm = np.linalg.norm(rel_pos, axis=1)
+    edge_attr = torch.tensor(
+        np.append(rel_pos, rel_pos_norm[:,None], axis=1),
+        dtype=torch.float
+    )
+
+    return node_feats, edge_attr
+
+
+def generate_graphs(state_vars, gt_edges=None):
     """
     Takes position data and generates a pytorch geometric graph
 
@@ -39,7 +63,6 @@ def generate_graphs(state_vars, wall_thresh=0.3, gt_edges=None):
     Return:
         graphs (list) - list of pytorch gemoetric graphs
     """
-    eps = 1e-16
     num_nodes = state_vars['x'].shape[0]
 
     # edge index for fully connected graph
@@ -54,23 +77,9 @@ def generate_graphs(state_vars, wall_thresh=0.3, gt_edges=None):
         pos_norm = np.linalg.norm(pos, axis=1)
         vel = state_vars['x_dot'][:, :, i]
         acc = state_vars['x_dot_dot'][:, :, i]
-        
-        # node features (velocity unit vector and distance to wall with threshold)
-        dist_from_wall = np.ones_like(pos_norm) - pos_norm
-        dist_from_wall_thresh = np.where(dist_from_wall < wall_thresh, pos_norm, 0.)
-        heading = vel / (np.linalg.norm(vel, axis=1, keepdims=True) + eps)
-        node_feats = torch.tensor(
-            np.append(heading, dist_from_wall_thresh[:,None], axis=1),
-            dtype=torch.float
-        )
 
-        # making edge features
-        rel_pos = pos[edge_index[0]] - pos[edge_index[1]]
-        rel_pos_norm = np.linalg.norm(rel_pos, axis=1)
-        edge_attr = torch.tensor(
-            np.append(rel_pos, rel_pos_norm[:,None], axis=1),
-            dtype=torch.float
-        )
+        # making edge and node feats
+        node_feats, edge_attr = make_edge_and_nodes(pos, pos_norm, vel, edge_index)
 
         # making graph
         graph = Data(

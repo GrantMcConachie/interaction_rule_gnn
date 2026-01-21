@@ -83,14 +83,17 @@ class LearnedSimModel(nn.Module):
             self,
             graph_edge_dim,
             graph_node_dim,
-            edge_encoder_hidden_dim=128,
-            node_encoder_hidden_dim=128,
-            out_dim=2,
-            gnn_layers=5,
-            noise_std=0.01,
-            dropout_prob=0.3
+            config
     ):
         super(LearnedSimModel, self).__init__()
+
+        # unpack config
+        edge_encoder_hidden_dim = config['model']['edge_encoder_hidden_dim']
+        node_encoder_hidden_dim = config['model']['node_encoder_hidden_dim']
+        out_dim = config['model']['out_dim']
+        gnn_layers = config['model']['gnn_layers']
+        self.noise_std = config['model']['noise_std']
+        dropout_prob = config['model']['dropout_prob']
 
         # edge and node encoders
         self.edge_encoder = nn.Sequential(
@@ -129,9 +132,6 @@ class LearnedSimModel(nn.Module):
             nn.LayerNorm(edge_encoder_hidden_dim) for _ in range(gnn_layers)
         ])
 
-        # model variables
-        self.noise_std = noise_std
-    
     def forward(self, graph):
         # unpack graph
         x = graph.x
