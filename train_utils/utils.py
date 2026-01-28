@@ -17,8 +17,9 @@ def save_model(model, args):
     """
     Saves model
     """
+    dataset = os.path.basename(args.dataset).replace('.pkl', '')
     os.makedirs(args.save_path, exist_ok=True)
-    torch.save(model.state_dict(), args.save_path)
+    torch.save(model.state_dict(), os.path.join(args.save_path, f'{dataset}.pt'))
 
 
 def split_and_load_data(config, args):
@@ -66,13 +67,13 @@ def make_state_graph(model_ouput, current_graph):
     Makes a single graph from a model prediction
     """
     pos_pred = model_ouput + current_graph.pos
-    pos_norm = pos_pred / (torch.linalg.norm(pos_pred) + 1e-16)
+    pos_norm = torch.linalg.norm(pos_pred, axis=1)
     vel = current_graph.pos - pos_pred  # magnitude doesn't matter because only heading direction is encoded
     node_feats, edge_attr = utils.make_edge_and_nodes(
-        pos_pred,
-        pos_norm,
-        vel,
-        current_graph.edge_index
+        pos_pred.cpu().detach().numpy(),
+        pos_norm.cpu().detach().numpy(),
+        vel.cpu().detach().numpy(),
+        current_graph.edge_index.cpu().detach().numpy()
     )
 
     # make new graph
@@ -80,8 +81,8 @@ def make_state_graph(model_ouput, current_graph):
         x=node_feats,
         edge_attr=edge_attr,
         edge_index=current_graph.edge_index,
-        pos=torch.tensor(pos_pred, dtype=torch.float),
-        vel=torch.tensor(vel, dtype=torch.float),
+        pos=pos_pred,
+        vel=vel,
     )
-    
+
     return graph

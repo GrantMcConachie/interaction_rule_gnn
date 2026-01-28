@@ -137,7 +137,7 @@ class springMassSystem():
             p_t[:,:,t+1] = pos_next
             v_t[:,:,t+1] = vel_next
 
-        return p_t, v_t, A_t
+        return p_t.transpose(1, 0, 2), v_t.transpose(1, 0, 2), A_t
 
 
 class springMassDynamicEdges(springMassSystem):
@@ -250,4 +250,4 @@ class springMassDynamicEdges(springMassSystem):
             v_t[:,:,t+1] = vel_next
             A_t[:,:,t+1] = A
 
-        return p_t, v_t, A_t
+        return p_t.transpose(1, 0, 2), v_t.transpose(1, 0, 2), A_t

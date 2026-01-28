@@ -59,9 +59,9 @@ def plot_trajectories(p_t, save_path, A=None, arena_radius=1.0, force_field_radi
 def animate_system(p_t, A_t, save_path, arena_radius=1.0, force_field_radius=None,
 start=0, stop=None, step=100, interval=30):
     """
-    p_t: (2, n, T), A_t: (n, n, T) boolean
+    p_t: (n, 2, T), A_t: (n, n, T) boolean
     """
-    n = p_t.shape[1]
+    n = p_t.shape[0]
     T = p_t.shape[2]
     stop = T if stop is None else min(stop, T)
     frames = range(start, stop, step)
@@ -70,7 +70,7 @@ start=0, stop=None, step=100, interval=30):
     if force_field_radius is not None:
         ax.add_patch(Circle((0, 0), force_field_radius, edgecolor='orange', facecolor='none', ls='--', lw=1))
 
-    scat = ax.scatter(p_t[0, :, start], p_t[1, :, start], s=30, c=np.arange(n), cmap='tab10')
+    scat = ax.scatter(p_t[:, 0, start], p_t[:, 1, start], s=30, c=np.arange(n), cmap='tab10')
     pairs = [(i, j) for i in range(n) for j in range(i+1, n)]
     lines = [ax.plot([], [], color='gray', alpha=0.5, lw=0.8)[0] for _ in pairs]
 
@@ -83,8 +83,8 @@ start=0, stop=None, step=100, interval=30):
     buf = np.empty((n, 2), dtype=p_t.dtype)
 
     def update(t):
-        buf[:, 0] = p_t[0, :, t]
-        buf[:, 1] = p_t[1, :, t]
+        buf[:, 0] = p_t[:, 0, t]
+        buf[:, 1] = p_t[:, 1, t]
         scat.set_offsets(buf)
         if A_t is not None:
             A = A_t[:, :, t].astype(bool)
