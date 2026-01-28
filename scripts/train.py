@@ -29,7 +29,7 @@ def evaluate(model, dataloader, device):
     for g in dataloader:
         g = g.to(device)
         out = model(g)
-        loss = loss_fn(out, g.pos, g.pos_next)
+        loss = loss_fn(out, g.vel)
         running_loss.append(loss.item())
     
     return sum(running_loss) / len(running_loss)
@@ -54,7 +54,7 @@ def evaluate_rollout(model, dataloader, writer, device):
         g_gt = g_gt.to(device)
         g = g.to(device)
         out = model(g)
-        loss = loss_fn(out, g.pos, g_gt.pos_next)
+        loss = loss_fn(out, g.vel)
         g = utils.make_state_graph(out, g)
         pred_pos.append(g.pos)
         writer.add_scalar("test/rollout_loss", loss.item(), i)
@@ -101,8 +101,9 @@ def train(args):
         config=config
     ).to(device)
 
-    # optimizer
+    # optimizer and loss
     opt = torch.optim.Adam(model.parameters(), lr=config['training']['lr'])
+    loss_fn = torch.nn.MSELoss()
 
     # training loop
     best_val_loss = 1e8
@@ -114,7 +115,7 @@ def train(args):
             g = g.to(device)
             opt.zero_grad()
             out = model(g)
-            loss = loss_fn(out, g.pos, g.pos_next)
+            loss = loss_fn(out, g.vel)
             loss.backward()
             opt.step()
             running_loss.append(loss.item())

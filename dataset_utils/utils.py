@@ -91,7 +91,8 @@ def generate_graphs(state_vars, gt_edges=None):
             pos_next=torch.tensor(pos_next, dtype=torch.float),
             vel=torch.tensor(vel, dtype=torch.float),
             acc=torch.tensor(acc, dtype=torch.float),
-            t=i
+            t=i,
+            dt=state_vars['dt']
         )
         graphs.append(graph)
 

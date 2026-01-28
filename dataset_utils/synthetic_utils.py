@@ -21,7 +21,8 @@ def make_state_vars(pos, vel, edges, dt, save_fp=None):
         'x': np.array(pos),
         'x_dot': np.array(vel),
         'x_dot_dot': np.gradient(vel, dt, axis=-1),
-        'edges': edges
+        'edges': edges,
+        'dt': dt
     }
     return state_vars
 

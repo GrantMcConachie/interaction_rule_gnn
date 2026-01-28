@@ -40,5 +40,6 @@ def generate_x_dot(loc, frame_rate=120):
     return {
         'x': np.array(x),
         'x_dot': np.array(x_dot),
-        'x_dot_dot': np.array(x_dot_dot)
+        'x_dot_dot': np.array(x_dot_dot),
+        'dt': 1/frame_rate
     }
