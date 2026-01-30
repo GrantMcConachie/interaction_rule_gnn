@@ -27,7 +27,7 @@ def make_state_vars(pos, vel, edges, dt, save_fp=None):
     return state_vars
 
 
-def plot_trajectories(p_t, save_path, A=None, arena_radius=1.0, force_field_radius=None, step=10):
+def plot_trajectories(p_t, save_path=None, A=None, arena_radius=1.0, force_field_radius=None, step=10):
     # p_t: (2, n, T), A: (n, n)
     n = p_t.shape[1]
     T = p_t.shape[2]
@@ -54,7 +54,13 @@ def plot_trajectories(p_t, save_path, A=None, arena_radius=1.0, force_field_radi
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_title('Spring–mass trajectories')
-    plt.savefig(save_path)
+
+    if save_path == None:
+        pass
+    else:
+        plt.savefig(save_path)
+
+    return ax
 
 
 def animate_system(p_t, A_t, save_path, arena_radius=1.0, force_field_radius=None,

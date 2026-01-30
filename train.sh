@@ -7,7 +7,7 @@
 #$ -m ea
 
 # Give job a name
-#$ -N MPNN_spring_mass
+#$ -N MPNN_spring_mass_gt_edges
 
 # Combine output and error files into a single file
 #$ -j y
@@ -32,4 +32,4 @@ echo "=========================================================="
 
 cd /projectnb/biochemai/Grant/interaction_rule_GNN
 source venv/bin/activate
-python scripts/train.py -m 'MPNN' -c '/projectnb/biochemai/Grant/interaction_rule_GNN/configs/mpnn.yaml' -d '/projectnb/biochemai/Grant/interaction_rule_GNN/data/spring_mass/static_graph/graphs/trial_0.pkl' -sp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/model' -lp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/logs/'
+python scripts/train.py -m 'MPNN' -c '/projectnb/biochemai/Grant/interaction_rule_GNN/configs/mpnn.yaml' -d '/projectnb/biochemai/Grant/interaction_rule_GNN/data/spring_mass/static_graph/graphs/trial_0.pkl' -sp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/model/gt_edges' -lp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/logs/gt_edges'

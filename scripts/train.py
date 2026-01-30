@@ -16,7 +16,7 @@ from models import models
 from train_utils import utils
 
 
-def evaluate(model, dataloader, device):
+def evaluate(model, dataloader, loss_fn, device):
     """
     Evaluate the model on a dataloader without training
     
@@ -54,26 +54,12 @@ def evaluate_rollout(model, dataloader, writer, device):
         g_gt = g_gt.to(device)
         g = g.to(device)
         out = model(g)
-        loss = loss_fn(out, g.vel)
         g = utils.make_state_graph(out, g)
-        pred_pos.append(g.pos)
+        loss = torch.nn.functional.mse_loss(g.pos, g_gt.pos_next)
+        pred_pos.append(g.pos.detach().cpu())
         writer.add_scalar("test/rollout_loss", loss.item(), i)
 
     return pred_pos
-
-
-def loss_fn(pred, pos, target):
-    """
-    Euler integration mse loss
-
-    :param pred: model prediction
-    :param graph: graph at current time step
-    :param graph: time step in the future that needs to be predicted
-    """
-    pos_pred = pos + pred
-    loss = torch.nn.functional.mse_loss(pos_pred, target)
-
-    return loss
 
 
 def train(args):
@@ -113,6 +99,11 @@ def train(args):
         running_loss = []
         for g in train_dataloader:
             g = g.to(device)
+
+            if config['training']['gt_edges']:
+                g.edge_index = g.gt_edge_index
+                g.edge_attr = g.gt_edge_attr
+
             opt.zero_grad()
             out = model(g)
             loss = loss_fn(out, g.vel)
@@ -126,7 +117,7 @@ def train(args):
 
         # evaluate on validation data
         with torch.no_grad():
-            avg_val_loss = evaluate(model, val_dataloader, device)
+            avg_val_loss = evaluate(model, val_dataloader, loss_fn, device)
             writer.add_scalar("val/loss", avg_val_loss, epoch)
 
             # saving best performing model
@@ -137,13 +128,18 @@ def train(args):
 
     # get test loss
     with torch.no_grad():
-        one_step_loss = evaluate(best_model, test_dataloader, device)
+        one_step_loss = evaluate(best_model, test_dataloader, loss_fn, device)
+        print(f"Test loss (one step): {one_step_loss}")
         writer.add_scalar("test/loss", one_step_loss, 0)
         pred_pos = evaluate_rollout(best_model, test_dataloader, writer, device)
 
     # save rollout predictions
     with open(os.path.join(args.save_path, f'{dataset}_rollout_preds.pkl'), 'wb') as f:
         pkl.dump(pred_pos, f)
+
+    # save config
+    with open(os.path.join(args.save_path, f'{dataset}_config.yaml'), 'w') as f:
+        yaml.dump(config, f)
 
     # close logs
     writer.close()

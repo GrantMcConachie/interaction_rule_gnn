@@ -99,19 +99,19 @@ def generate_spring_mass_graphs(save_fp, config, dynamic, seed):
 
 
 if __name__ == '__main__':
-    print('Creating fish graphs')
+    # print('Creating fish graphs')
 
-    # 8 fish
-    generate_fish_graphs(
-        fp='data/fish/raw data/8fish',
-        save_fp='data/fish/processed/8fish'
-    )
+    # # 8 fish
+    # generate_fish_graphs(
+    #     fp='data/fish/raw data/8fish',
+    #     save_fp='data/fish/processed/8fish'
+    # )
 
-    # 10 fish
-    generate_fish_graphs(
-        fp='data/fish/raw data/10fish/DATA',
-        save_fp='data/fish/processed/10fish'
-    )
+    # # 10 fish
+    # generate_fish_graphs(
+    #     fp='data/fish/raw data/10fish/DATA',
+    #     save_fp='data/fish/processed/10fish'
+    # )
 
     print('Creating spring mass system graphs')
     

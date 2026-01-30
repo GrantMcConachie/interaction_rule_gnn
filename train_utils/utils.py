@@ -22,15 +22,10 @@ def save_model(model, args):
     torch.save(model.state_dict(), os.path.join(args.save_path, f'{dataset}.pt'))
 
 
-def split_and_load_data(config, args):
+def split_with_config(data, config):
     """
-    Loads in the dataset of interest and splits the data    
+    Splits the dataset with dataset and a config file
     """
-    # load data
-    with open(args.dataset, 'rb') as f:
-        data = pkl.load(f)
-    
-    # split
     dat_train, dat_test = train_test_split(
         data,
         test_size=config['training']['test_split'],
@@ -41,6 +36,20 @@ def split_and_load_data(config, args):
         test_size=config['training']['val_split'] / (1 - config['training']['test_split']),
         shuffle=False
     )
+
+    return dat_train, dat_val, dat_test
+
+
+def split_and_load_data(config, args):
+    """
+    Loads in the dataset of interest and splits the data    
+    """
+    # load data
+    with open(args.dataset, 'rb') as f:
+        data = pkl.load(f)
+    
+    # split
+    dat_train, dat_val, dat_test = split_with_config(data, config)
 
     # make into dataloaders
     train_dataloader = DataLoader(
@@ -66,7 +75,7 @@ def make_state_graph(model_ouput, current_graph):
     """
     Makes a single graph from a model prediction
     """
-    pos_pred = model_ouput + current_graph.pos
+    pos_pred = model_ouput * current_graph.dt + current_graph.pos
     pos_norm = torch.linalg.norm(pos_pred, axis=1)
     vel = current_graph.pos - pos_pred  # magnitude doesn't matter because only heading direction is encoded
     node_feats, edge_attr = utils.make_edge_and_nodes(
@@ -83,6 +92,7 @@ def make_state_graph(model_ouput, current_graph):
         edge_index=current_graph.edge_index,
         pos=pos_pred,
         vel=vel,
+        dt=current_graph.dt
     )
 
     return graph

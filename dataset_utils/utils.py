@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 import torch
 from torch_geometric.data import Data
+from torch_geometric.utils import dense_to_sparse
 
 
 def make_fc_edge_idx(num_nodes):
@@ -81,12 +82,18 @@ def generate_graphs(state_vars, gt_edges=None):
         # making edge and node feats
         node_feats, edge_attr = make_edge_and_nodes(pos, pos_norm, vel, edge_index)
 
+        # making edge_attr and edge_index for ground truth edges
+        if gt_edges is not None:
+            gt_edge_index, _ = dense_to_sparse(torch.tensor(gt_edges[:, :, i]))
+            _, gt_edge_attr = make_edge_and_nodes(pos, pos_norm, vel, gt_edge_index)
+
         # making graph
         graph = Data(
             x=node_feats,
             edge_attr=edge_attr,
             edge_index=edge_index,
-            gt_edge_index=gt_edges[:, :, i] if gt_edges is not None else None,
+            gt_edge_index=gt_edge_index if gt_edges is not None else None,
+            gt_edge_attr=gt_edge_attr if gt_edges is not None else None,
             pos=torch.tensor(pos, dtype=torch.float),
             pos_next=torch.tensor(pos_next, dtype=torch.float),
             vel=torch.tensor(vel, dtype=torch.float),
