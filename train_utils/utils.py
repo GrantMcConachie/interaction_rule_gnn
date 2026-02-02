@@ -60,7 +60,7 @@ def split_and_load_data(config, args):
     val_dataloader = DataLoader(
         dat_val,
         batch_size=config['training']['batch_size'],
-        shuffle=True
+        shuffle=False
     )
     test_dataloader = DataLoader(
         dat_test,
@@ -71,17 +71,18 @@ def split_and_load_data(config, args):
     return train_dataloader, val_dataloader, test_dataloader
 
 
-def make_state_graph(model_ouput, current_graph):
+def make_state_graph_acc(model_output, current_graph):
     """
     Makes a single graph from a model prediction
     """
-    pos_pred = model_ouput * current_graph.dt + current_graph.pos
-    pos_norm = torch.linalg.norm(pos_pred, axis=1)
-    vel = current_graph.pos - pos_pred  # magnitude doesn't matter because only heading direction is encoded
+    dt = current_graph.dt
+    pos_pred = model_output * 1/2 * dt ** 2 + current_graph.vel * dt + current_graph.pos
+    vel_pred = current_graph.vel + model_output * dt
+    pos_norm = torch.linalg.norm(pos_pred, dim=1)
     node_feats, edge_attr = utils.make_edge_and_nodes(
         pos_pred.cpu().detach().numpy(),
         pos_norm.cpu().detach().numpy(),
-        vel.cpu().detach().numpy(),
+        vel_pred.cpu().detach().numpy(),
         current_graph.edge_index.cpu().detach().numpy()
     )
 
@@ -91,7 +92,33 @@ def make_state_graph(model_ouput, current_graph):
         edge_attr=edge_attr,
         edge_index=current_graph.edge_index,
         pos=pos_pred,
-        vel=vel,
+        vel=vel_pred,
+        dt=dt
+    )
+
+    return graph
+
+
+def make_state_graph_vel(model_output, current_graph):
+    """
+    Makes a single graph from a model prediction
+    """
+    pos_pred = model_output * current_graph.dt + current_graph.pos
+    pos_norm = torch.linalg.norm(pos_pred, axis=1)
+    node_feats, edge_attr = utils.make_edge_and_nodes(
+        pos_pred.cpu().detach().numpy(),
+        pos_norm.cpu().detach().numpy(),
+        model_output.cpu().detach().numpy(),
+        current_graph.edge_index.cpu().detach().numpy()
+    )
+
+    # make new graph
+    graph = Data(
+        x=node_feats,
+        edge_attr=edge_attr,
+        edge_index=current_graph.edge_index,
+        pos=pos_pred,
+        vel=model_output,
         dt=current_graph.dt
     )
 

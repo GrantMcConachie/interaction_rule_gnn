@@ -34,9 +34,8 @@ def make_edge_and_nodes(pos, pos_norm, vel, edge_index, eps=1e-16, wall_thresh=0
     # node features (velocity unit vector and distance to wall with threshold)
     dist_from_wall = np.ones_like(pos_norm) - pos_norm
     dist_from_wall_thresh = np.where(dist_from_wall < wall_thresh, pos_norm, 0.)
-    heading = vel / (np.linalg.norm(vel, axis=1, keepdims=True) + eps)
     node_feats = torch.tensor(
-        np.append(heading, dist_from_wall_thresh[:,None], axis=1),
+        np.append(vel, dist_from_wall_thresh[:,None], axis=1),
         dtype=torch.float
     )
 

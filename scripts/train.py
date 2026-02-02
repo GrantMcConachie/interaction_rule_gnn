@@ -16,7 +16,7 @@ from models import models
 from train_utils import utils
 
 
-def evaluate(model, dataloader, loss_fn, device):
+def evaluate(model, dataloader, loss_fn, config, device):
     """
     Evaluate the model on a dataloader without training
     
@@ -28,14 +28,20 @@ def evaluate(model, dataloader, loss_fn, device):
     running_loss = []
     for g in dataloader:
         g = g.to(device)
+
+        # if using ground truth edges
+        if config['training']['gt_edges']:
+            g.edge_index = g.gt_edge_index
+            g.edge_attr = g.gt_edge_attr
+        
         out = model(g)
-        loss = loss_fn(out, g.vel)
+        loss = loss_fn(out, g.acc)
         running_loss.append(loss.item())
     
     return sum(running_loss) / len(running_loss)
 
 
-def evaluate_rollout(model, dataloader, writer, device):
+def evaluate_rollout(model, dataloader, writer, config, device):
     """
     Evaluate how well the model does on rollout prediction
     
@@ -48,16 +54,28 @@ def evaluate_rollout(model, dataloader, writer, device):
     
     # initial graph
     g = next(iter(dataloader))
+    pred_pos.append(g.pos.detach().cpu())
+
+    if config['training']['gt_edges']:
+        g.edge_index = g.gt_edge_index
+        g.edge_attr = g.gt_edge_attr
 
     # loop through range of dataloader
     for i, g_gt in enumerate(dataloader):
         g_gt = g_gt.to(device)
         g = g.to(device)
+
+        # if using ground truth edges
+        if config['training']['gt_edges']:
+            g.edge_index = g_gt.gt_edge_index
+
         out = model(g)
-        g = utils.make_state_graph(out, g)
+        g = utils.make_state_graph_acc(out, g)
         loss = torch.nn.functional.mse_loss(g.pos, g_gt.pos_next)
         pred_pos.append(g.pos.detach().cpu())
-        writer.add_scalar("test/rollout_loss", loss.item(), i)
+
+        if writer is not None:
+            writer.add_scalar("test/rollout_loss", loss.item(), i)
 
     return pred_pos
 
@@ -106,7 +124,7 @@ def train(args):
 
             opt.zero_grad()
             out = model(g)
-            loss = loss_fn(out, g.vel)
+            loss = loss_fn(out, g.acc)
             loss.backward()
             opt.step()
             running_loss.append(loss.item())
@@ -117,21 +135,21 @@ def train(args):
 
         # evaluate on validation data
         with torch.no_grad():
-            avg_val_loss = evaluate(model, val_dataloader, loss_fn, device)
+            avg_val_loss = evaluate(model, val_dataloader, loss_fn, config, device)
             writer.add_scalar("val/loss", avg_val_loss, epoch)
 
             # saving best performing model
             if avg_val_loss < best_val_loss:
-                utils.save_model(model, args)
                 best_model = copy.deepcopy(model)
+                utils.save_model(best_model, args)
                 best_val_loss = avg_val_loss
 
     # get test loss
     with torch.no_grad():
-        one_step_loss = evaluate(best_model, test_dataloader, loss_fn, device)
+        one_step_loss = evaluate(best_model, test_dataloader, loss_fn, config, device)
         print(f"Test loss (one step): {one_step_loss}")
         writer.add_scalar("test/loss", one_step_loss, 0)
-        pred_pos = evaluate_rollout(best_model, test_dataloader, writer, device)
+        pred_pos = evaluate_rollout(best_model, test_dataloader, writer, config, device)
 
     # save rollout predictions
     with open(os.path.join(args.save_path, f'{dataset}_rollout_preds.pkl'), 'wb') as f:
@@ -148,9 +166,6 @@ def train(args):
 if __name__ == '__main__':
     # parse args
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-m', '--model', type=str, help='Model to be trained.', required=False, default="MPNN"
-    )
     parser.add_argument(
         '-c', '--config', type=str, help='Path to config file.', required=False, default="configs/mpnn.yaml"
     )
