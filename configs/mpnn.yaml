@@ -1,5 +1,5 @@
 model:
-  gnn_type: "MPNN"
+  gnn_type: "GAT"
   num_heads: 8  # only applicable for GAT
   edge_encoder_hidden_dim: 128
   node_encoder_hidden_dim: 128
@@ -14,4 +14,4 @@ training:
   epochs: 300
   test_split: 0.2  # percentage data in the test split
   val_split: 0.1  # percentage of data in the validation split
-  gt_edges: False  # whether to train with ground truth edges or not
+  gt_edges: True  # whether to train with ground truth edges or not

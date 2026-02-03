@@ -173,10 +173,10 @@ if __name__ == '__main__':
         '-d', '--dataset', type=str, help='Path to dataset.', required=False, default="data/spring_mass/static_graph/graphs/trial_0.pkl"
     )
     parser.add_argument(
-        '-sp', '--save_path', type=str, help='model save path. (e.g. path/to/model.pt)', required=False, default="/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/model/"
+        '-sp', '--save_path', type=str, help='model save path. (e.g. path/to/model.pt)', required=False, default="/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/model/test"
     )
     parser.add_argument(
-        '-lp', '--log_path', type=str, help='model log path.', required=False, default="/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/logs"
+        '-lp', '--log_path', type=str, help='model log path.', required=False, default="/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/logs/test"
     )
     args = parser.parse_args()
     train(args)

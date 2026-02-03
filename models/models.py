@@ -6,6 +6,7 @@ import pickle as pkl
 
 import torch
 import torch.nn as nn
+from torch_geometric.nn.conv import GATConv
 from torch_geometric.nn import MessagePassing
 
 
@@ -18,20 +19,20 @@ class MPNN(MessagePassing):
     def __init__(
             self,
             in_channels,
-            edge_emb_dim,
+            edge_dim,
             dropout,
             mlp_hidden_dim=128,
             out_channels=128
     ):
         super().__init__(aggr='add')
         self.edge_mlp = nn.Sequential(
-            nn.Linear(2 * in_channels + edge_emb_dim, mlp_hidden_dim),
+            nn.Linear(2 * in_channels + edge_dim, mlp_hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(mlp_hidden_dim, out_channels)
         )
         self.node_mlp = nn.Sequential(
-            nn.Linear(in_channels + edge_emb_dim, mlp_hidden_dim),
+            nn.Linear(in_channels + edge_dim, mlp_hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(mlp_hidden_dim, out_channels)
@@ -40,7 +41,7 @@ class MPNN(MessagePassing):
     def forward(self, x, edge_attr, edge_index, **kwargs):
         """
         Forward pass of the model
-        
+
         :param x: node vectors
         :param edge_attr: edge vectors
         :param edge_index: edge index, dictating where edges are
@@ -56,16 +57,16 @@ class MPNN(MessagePassing):
     def message(self, x_i, edge_attr):
         """
         Update for the nodes
-        
+
         :param x_i: Node vector
         :param edge_attr: sum of the incoming edgees
         """
         return x_i + self.node_mlp(torch.cat([x_i, edge_attr], axis=1))
-    
+
     def edge_update(self, x_i, x_j, edge_attr):
         """
         update for edges
-        
+
         :param x_i: node vector on one side of edge
         :param x_j: node vector on the other side of the edge
         :param edge_attr: edge vector
@@ -81,20 +82,24 @@ class GAT(MessagePassing):
     def __init__(
             self,
             in_channels,
-            edge_emb_dim,
+            edge_dim,
             dropout,
+            heads,
             mlp_hidden_dim=128,
             out_channels=128
     ):
         super().__init__(aggr='add')
-        self.edge_mlp = nn.Sequential(
-            nn.Linear(2 * in_channels + edge_emb_dim, mlp_hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(mlp_hidden_dim, out_channels)
+        self.node_gat = GATConv(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            dropout=dropout,
+            edge_dim=edge_dim,
+            heads=heads,
+            concat=False,
+            add_self_loops=False
         )
-        self.node_mlp = nn.Sequential(
-            nn.Linear(in_channels + edge_emb_dim, mlp_hidden_dim),
+        self.edge_mlp = nn.Sequential(
+            nn.Linear(2 * in_channels + edge_dim, mlp_hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(mlp_hidden_dim, out_channels)
@@ -102,7 +107,7 @@ class GAT(MessagePassing):
 
     def forward(self, x, edge_attr, edge_index, **kwargs):
         """
-        Forward pass of the model TODO
+        Forward pass of the model
         
         :param x: node vectors
         :param edge_attr: edge vectors
@@ -111,23 +116,23 @@ class GAT(MessagePassing):
         # Update the edges with the surrounding node information
         edge_attr = self.edge_updater(edge_index=edge_index, edge_attr=edge_attr, x=x)
 
-        # update the nodes with the surrounding edge information
-        x = self.propagate(edge_index=edge_index, edge_attr=edge_attr, x=x)
+        # update the nodes with the surrounding edge information using a GAT
+        x, (pred_adj_mat, attn_weights) = self.node_gat(
+            x=x,
+            edge_index=edge_index,
+            edge_attr=edge_attr,
+            return_attention_weights=True
+        )
+
+        # store attn weights
+        self.pred_adj_mat = pred_adj_mat
+        self.attn_weights = attn_weights
 
         return x, edge_attr
-
-    def message(self, x_i, edge_attr):
-        """
-        Update for the nodes TODO
-        
-        :param x_i: Node vector
-        :param edge_attr: sum of the incoming edgees
-        """
-        return x_i + self.node_mlp(torch.cat([x_i, edge_attr], axis=1))
     
     def edge_update(self, x_i, x_j, edge_attr):
         """
-        update for edges TODO
+        update for edges
         
         :param x_i: node vector on one side of edge
         :param x_j: node vector on the other side of the edge
@@ -135,7 +140,7 @@ class GAT(MessagePassing):
         """
         return edge_attr + self.edge_mlp(torch.cat([x_i, x_j, edge_attr], axis=1))
 
-    
+
 class LearnedSimModel(nn.Module):
     """
     Model that closley follows many of the learned simulator physics models
@@ -176,26 +181,34 @@ class LearnedSimModel(nn.Module):
         self.model_type = config['model']['gnn_type']
         model_list = ["MPNN", "GAT"] 
         if self.model_type == 'MPNN':
-            gnn = MPNN(
-                in_channels=node_encoder_hidden_dim,
-                out_channels=node_encoder_hidden_dim,
-                edge_dim=edge_encoder_hidden_dim, 
-                dropout=dropout_prob,
+            self.gnn_layers = nn.ModuleList(
+                [
+                    MPNN(
+                        in_channels=node_encoder_hidden_dim,
+                        out_channels=node_encoder_hidden_dim,
+                        edge_dim=edge_encoder_hidden_dim, 
+                        dropout=dropout_prob,
+                    )
+                    for _ in range(gnn_layers)
+                ]
             )
         
         elif self.model_type == 'GAT':
-            gnn = GAT(
-                in_channels=node_encoder_hidden_dim,
-                out_channels=node_encoder_hidden_dim,
-                edge_dim=edge_encoder_hidden_dim,
-                dropout=dropout_prob,
-                heads=config['model']['num_heads']
+            self.gnn_layers = nn.ModuleList(
+                [
+                    GAT(
+                        in_channels=node_encoder_hidden_dim,
+                        out_channels=node_encoder_hidden_dim,
+                        edge_dim=edge_encoder_hidden_dim,
+                        dropout=dropout_prob,
+                        heads=config['model']['num_heads']
+                    )
+                    for _ in range(gnn_layers)
+                ]
             )
 
         else:
             assert self.model_type not in model_list, f"{self.model_type} not in {model_list}"
-
-        self.gnn_layers = nn.ModuleList([gnn for _ in range(gnn_layers)])
 
         # Decoder
         self.decoder = nn.Sequential(
@@ -231,8 +244,8 @@ class LearnedSimModel(nn.Module):
         # pass through gnn
         for gnn, x_norm, e_norm in zip(self.gnn_layers, self.x_norm, self.e_norm):
             x_gnn, edge_attr_gnn = gnn(x, edge_attr=edge_attr, edge_index=graph.edge_index, return_attention_weights=True)
-            x += x_gnn
-            edge_attr += edge_attr_gnn
+            x = x + x_gnn
+            edge_attr = edge_attr + edge_attr_gnn
             x = x_norm(x)
             edge_attr = e_norm(edge_attr)
 
