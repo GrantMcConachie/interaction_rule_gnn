@@ -60,7 +60,7 @@ class MPNN(MessagePassing):
         :param x_i: Node vector
         :param edge_attr: sum of the incoming edgees
         """
-        return x_i + self.node_mlp(torch.cat([x_i, edge_attr], axis=1))
+        return self.node_mlp(torch.cat([x_i, edge_attr], axis=1))
 
     def edge_update(self, x_i, x_j, edge_attr):
         """
@@ -70,7 +70,7 @@ class MPNN(MessagePassing):
         :param x_j: node vector on the other side of the edge
         :param edge_attr: edge vector
         """
-        return edge_attr + self.edge_mlp(torch.cat([x_i, x_j, edge_attr], axis=1))
+        return self.edge_mlp(torch.cat([x_i, x_j, edge_attr], axis=1))
 
 
 class GAT(MessagePassing):
@@ -137,7 +137,7 @@ class GAT(MessagePassing):
         :param x_j: node vector on the other side of the edge
         :param edge_attr: edge vector
         """
-        return edge_attr + self.edge_mlp(torch.cat([x_i, x_j, edge_attr], dim=1))
+        return self.edge_mlp(torch.cat([x_i, x_j, edge_attr], dim=1))
 
 
 class LearnedSimModel(nn.Module):
