@@ -7,7 +7,7 @@
 #$ -m ea
 
 # Give job a name
-#$ -N MPNN_spring_mass_sanity_check
+#$ -N GPS_spring_mass_rollout_val_no_gt_edges
 
 # Combine output and error files into a single file
 #$ -j y
@@ -32,4 +32,4 @@ echo "=========================================================="
 
 cd /projectnb/biochemai/Grant/interaction_rule_GNN
 source venv/bin/activate
-python scripts/train.py -c '/projectnb/biochemai/Grant/interaction_rule_GNN/configs/mpnn.yaml' -d '/projectnb/biochemai/Grant/interaction_rule_GNN/data/spring_mass/static_graph/graphs/trial_0.pkl' -sp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/model/sanity_check' -lp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/logs/sanity_check'
+python scripts/train.py -c '/projectnb/biochemai/Grant/interaction_rule_GNN/configs/gps.yaml' -d '/projectnb/biochemai/Grant/interaction_rule_GNN/data/spring_mass/static_graph/graphs/trial_0.pkl' -sp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/GPS/model/no_gt_edges_rollout_vel' -lp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/GPS/logs/no_gt_edges_rollout_vel'

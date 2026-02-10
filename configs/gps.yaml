@@ -1,5 +1,5 @@
 model:
-  gnn_type: "MPNN"
+  gnn_type: "GPS"
   num_heads: 4  # only applicable for GAT
   edge_encoder_hidden_dim: 128
   node_encoder_hidden_dim: 128

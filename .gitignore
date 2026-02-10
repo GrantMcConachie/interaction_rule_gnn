@@ -2,7 +2,6 @@
 data/
 bash_output/
 results/
-train.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

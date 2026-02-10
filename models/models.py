@@ -6,9 +6,8 @@ import pickle as pkl
 
 import torch
 import torch.nn as nn
-from torch_geometric.nn.conv import GATConv
 from torch_geometric.nn import MessagePassing
-
+from torch_geometric.nn.conv import GATConv, GPSConv, GINEConv
 
 ### Learned simulator MPNN aproach ###
 class MPNN(MessagePassing):
@@ -138,7 +137,7 @@ class GAT(MessagePassing):
         :param x_j: node vector on the other side of the edge
         :param edge_attr: edge vector
         """
-        return edge_attr + self.edge_mlp(torch.cat([x_i, x_j, edge_attr], axis=1))
+        return edge_attr + self.edge_mlp(torch.cat([x_i, x_j, edge_attr], dim=1))
 
 
 class LearnedSimModel(nn.Module):
@@ -162,6 +161,7 @@ class LearnedSimModel(nn.Module):
         gnn_layers = config['model']['gnn_layers']
         self.noise_std = config['model']['noise_std']
         dropout_prob = config['model']['dropout_prob']
+        attn_heads = config['model']['num_heads']
 
         # edge and node encoders
         self.edge_encoder = nn.Sequential(
@@ -179,7 +179,7 @@ class LearnedSimModel(nn.Module):
 
         # GNN layers
         self.model_type = config['model']['gnn_type']
-        model_list = ["MPNN", "GAT"] 
+        model_list = ["MPNN", "GAT", "GPS"] 
         if self.model_type == 'MPNN':
             self.gnn_layers = nn.ModuleList(
                 [
@@ -201,7 +201,24 @@ class LearnedSimModel(nn.Module):
                         out_channels=node_encoder_hidden_dim,
                         edge_dim=edge_encoder_hidden_dim,
                         dropout=dropout_prob,
-                        heads=config['model']['num_heads']
+                        heads=attn_heads
+                    )
+                    for _ in range(gnn_layers)
+                ]
+            )
+        
+        elif self.model_type == 'GPS':
+            self.gnn_layers = nn.ModuleList(
+                [
+                    GPSConv(
+                        channels=node_encoder_hidden_dim,
+                        conv=GINEConv(nn.Sequential(
+                            nn.Linear(node_encoder_hidden_dim, node_encoder_hidden_dim),
+                            nn.ReLU(),
+                            nn.Linear(node_encoder_hidden_dim, node_encoder_hidden_dim)
+                        )),
+                        heads=attn_heads,
+                        dropout=dropout_prob
                     )
                     for _ in range(gnn_layers)
                 ]
@@ -232,33 +249,41 @@ class LearnedSimModel(nn.Module):
         edge_attr = graph.edge_attr
 
         # add noise to every input for now
-        node_noise = torch.randn_like(x) * self.noise_std
-        edge_noise = torch.randn_like(edge_attr) * self.noise_std
-        x = x + node_noise
-        edge_attr = edge_attr + edge_noise
+        if self.training:
+            node_noise = torch.randn_like(x) * self.noise_std
+            edge_noise = torch.randn_like(edge_attr) * self.noise_std
+            x = x + node_noise
+            edge_attr = edge_attr + edge_noise
 
         # embed nodes and edges
         x = self.node_encoder(x)
         edge_attr = self.edge_encoder(edge_attr)
 
         # pass through gnn
-        for gnn, x_norm, e_norm in zip(self.gnn_layers, self.x_norm, self.e_norm):
-            x_gnn, edge_attr_gnn = gnn(x, edge_attr=edge_attr, edge_index=graph.edge_index, return_attention_weights=True)
-            x = x + x_gnn
-            edge_attr = edge_attr + edge_attr_gnn
-            x = x_norm(x)
-            edge_attr = e_norm(edge_attr)
+        if self.model_type == "GPS":
+            for gnn, x_norm, _ in zip(self.gnn_layers, self.x_norm, self.e_norm):
+                x_gnn = gnn(x, edge_attr=edge_attr, edge_index=graph.edge_index, batch=graph.batch)
+                x = x + x_gnn
+                x = x_norm(x)
+
+        else:
+            for gnn, x_norm, e_norm in zip(self.gnn_layers, self.x_norm, self.e_norm):
+                x_gnn, edge_attr_gnn = gnn(x, edge_attr=edge_attr, edge_index=graph.edge_index, return_attention_weights=True)
+                x = x + x_gnn
+                edge_attr = edge_attr + edge_attr_gnn
+                x = x_norm(x)
+                edge_attr = e_norm(edge_attr)
 
         # decode for predicted next position, subtracting added noise
-        x = self.decoder(x) - node_noise[:, :2]
+        if self.training:
+            x = self.decoder(x) - node_noise[:, :2]
+        else:
+            x = self.decoder(x)
 
         return x
 
 
 ### NRI model TODO ###
-
-
-### GAT TODO ###
 
 
 if __name__ == '__main__':

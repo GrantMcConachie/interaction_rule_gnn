@@ -57,11 +57,21 @@ def split_and_load_data(config, args):
         batch_size=config['training']['batch_size'],
         shuffle=True
     )
-    val_dataloader = DataLoader(
-        dat_val,
-        batch_size=config['training']['batch_size'],
-        shuffle=False
-    )
+
+    if config['training']['validate_with_rollout']:
+        val_dataloader = DataLoader(
+            dat_val,
+            batch_size=1,
+            shuffle=False
+        )
+
+    else:
+        val_dataloader = DataLoader(
+            dat_val,
+            batch_size=config['training']['batch_size'],
+            shuffle=False
+        )
+
     test_dataloader = DataLoader(
         dat_test,
         batch_size=1,

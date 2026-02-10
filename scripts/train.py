@@ -16,6 +16,13 @@ from models import models
 from train_utils import utils
 
 
+def set_seed(seed=0):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 def evaluate(model, dataloader, loss_fn, config, device):
     """
     Evaluate the model on a dataloader without training
@@ -41,7 +48,7 @@ def evaluate(model, dataloader, loss_fn, config, device):
     return sum(running_loss) / len(running_loss)
 
 
-def evaluate_rollout(model, dataloader, writer, config, device):
+def evaluate_rollout(model, dataloader, writer, config, dataset, device):
     """
     Evaluate how well the model does on rollout prediction
     
@@ -51,6 +58,7 @@ def evaluate_rollout(model, dataloader, writer, config, device):
     """
     model.eval()
     pred_pos = []
+    loss_roll = []
     
     # initial graph
     g = next(iter(dataloader))
@@ -73,11 +81,12 @@ def evaluate_rollout(model, dataloader, writer, config, device):
         g = utils.make_state_graph_acc(out, g)
         loss = torch.nn.functional.mse_loss(g.pos, g_gt.pos_next)
         pred_pos.append(g.pos.detach().cpu())
+        loss_roll.append(loss.item())
 
-        if writer is not None:
+        if writer is not None and dataset == "test":
             writer.add_scalar("test/rollout_loss", loss.item(), i)
 
-    return pred_pos
+    return pred_pos, sum(loss_roll) / len(loss_roll)
 
 
 def train(args):
@@ -135,21 +144,28 @@ def train(args):
 
         # evaluate on validation data
         with torch.no_grad():
-            avg_val_loss = evaluate(model, val_dataloader, loss_fn, config, device)
+            if config['training']['validate_with_rollout']:
+                _, avg_val_loss = evaluate_rollout(model, val_dataloader, writer, config, "val", device)
+            else:
+                avg_val_loss = evaluate(model, val_dataloader, loss_fn, config, device)
+            
             writer.add_scalar("val/loss", avg_val_loss, epoch)
 
             # saving best performing model
             if avg_val_loss < best_val_loss:
+                best_epoch = epoch
                 best_model = copy.deepcopy(model)
                 utils.save_model(best_model, args)
                 best_val_loss = avg_val_loss
+
+    print(f"best model epoch: {best_epoch}")
 
     # get test loss
     with torch.no_grad():
         one_step_loss = evaluate(best_model, test_dataloader, loss_fn, config, device)
         print(f"Test loss (one step): {one_step_loss}")
         writer.add_scalar("test/loss", one_step_loss, 0)
-        pred_pos = evaluate_rollout(best_model, test_dataloader, writer, config, device)
+        pred_pos, _ = evaluate_rollout(best_model, test_dataloader, writer, config, "test", device)
 
     # save rollout predictions
     with open(os.path.join(args.save_path, f'{dataset}_rollout_preds.pkl'), 'wb') as f:
@@ -179,4 +195,5 @@ if __name__ == '__main__':
         '-lp', '--log_path', type=str, help='model log path.', required=False, default="/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/MPNN/logs/test"
     )
     args = parser.parse_args()
+    set_seed()
     train(args)
