@@ -23,6 +23,21 @@ def set_seed(seed=0):
     torch.backends.cudnn.benchmark = False
 
 
+def pos_loss_fn(output, g):
+    """
+    Loss that uses next position as target rather than acceleration
+
+    :param output: model output (acceleration)
+    :param g: current graph
+    """
+    # euler integration for next position
+    dt = torch.mean(g.dt)  # to make it a scalar
+    pos_pred = output * 1/2 * dt ** 2 + g.vel * dt + g.pos
+    loss = torch.nn.functional.mse_loss(pos_pred, g.pos_next)
+
+    return loss
+
+
 def evaluate(model, dataloader, loss_fn, config, device):
     """
     Evaluate the model on a dataloader without training
@@ -42,7 +57,12 @@ def evaluate(model, dataloader, loss_fn, config, device):
             g.edge_attr = g.gt_edge_attr
         
         out = model(g)
-        loss = loss_fn(out, g.acc)
+
+        if config['training']['pred_pos']:
+            loss = loss_fn(out, g)
+        else:
+            loss = loss_fn(out, g.acc)
+
         running_loss.append(loss.item())
     
     return sum(running_loss) / len(running_loss)
@@ -59,9 +79,11 @@ def evaluate_rollout(model, dataloader, writer, config, dataset, device):
     model.eval()
     pred_pos = []
     loss_roll = []
-    
+    step = config['training']['downsample_timestep']
+
     # initial graph
-    g = next(iter(dataloader))
+    dat = list(dataloader)
+    g = dat[0]
     pred_pos.append(g.pos.detach().cpu())
 
     if config['training']['gt_edges']:
@@ -69,8 +91,9 @@ def evaluate_rollout(model, dataloader, writer, config, dataset, device):
         g.edge_attr = g.gt_edge_attr
 
     # loop through range of dataloader
-    for i, g_gt in enumerate(dataloader):
-        g_gt = g_gt.to(device)
+    i = 0
+    while i + step < len(dat):
+        g_gt = dat[i].to(device)
         g = g.to(device)
 
         # if using ground truth edges
@@ -85,6 +108,9 @@ def evaluate_rollout(model, dataloader, writer, config, dataset, device):
 
         if writer is not None and dataset == "test":
             writer.add_scalar("test/rollout_loss", loss.item(), i)
+
+        # advance graph by step
+        i += step
 
     return pred_pos, sum(loss_roll) / len(loss_roll)
 
@@ -116,7 +142,12 @@ def train(args):
 
     # optimizer and loss
     opt = torch.optim.Adam(model.parameters(), lr=config['training']['lr'])
-    loss_fn = torch.nn.MSELoss()
+
+    # changing loss function to either predict acceleration or next poisiton
+    if config['training']['pred_pos']:
+        loss_fn = pos_loss_fn
+    else:
+        loss_fn = torch.nn.MSELoss()
 
     # training loop
     best_val_loss = 1e8
@@ -133,7 +164,12 @@ def train(args):
 
             opt.zero_grad()
             out = model(g)
-            loss = loss_fn(out, g.acc)
+
+            if config['training']['pred_pos']:
+                loss = loss_fn(out, g)
+            else:
+                loss = loss_fn(out, g.acc)
+
             loss.backward()
             opt.step()
             running_loss.append(loss.item())

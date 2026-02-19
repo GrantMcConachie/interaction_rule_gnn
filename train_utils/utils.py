@@ -3,12 +3,14 @@ Utility functions for training script
 """
 
 import os
+import numpy as np
 import pickle as pkl
 from sklearn.model_selection import train_test_split
 
 import torch
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
+from torch_geometric.utils import to_dense_adj
 
 from dataset_utils import utils
 
@@ -40,6 +42,27 @@ def split_with_config(data, config):
     return dat_train, dat_val, dat_test
 
 
+def downsample_data(data, step):
+    """
+    function that downsamples data
+
+    :param data: dataset that you wish to downsample
+    :param downsample_step: how many timesteps to downsample
+    """
+    # calculate new data length
+    new_len = len(data) - step
+
+    # calculate new dt
+    dt = data[0].dt * step
+
+    # loop through data and adjust next position
+    for i in range(new_len):
+        data[i].pos_next = data[i + step].pos
+        data[i].dt = dt
+
+    return data[:new_len]
+
+
 def split_and_load_data(config, args):
     """
     Loads in the dataset of interest and splits the data    
@@ -47,7 +70,11 @@ def split_and_load_data(config, args):
     # load data
     with open(args.dataset, 'rb') as f:
         data = pkl.load(f)
-    
+
+    # downsample
+    if config['training']['downsample_timestep'] != 1:
+        data = downsample_data(data, config['training']['downsample_timestep'])
+
     # split
     dat_train, dat_val, dat_test = split_with_config(data, config)
 

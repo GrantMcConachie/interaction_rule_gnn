@@ -35,7 +35,7 @@ def generate_fish_graphs(fp, save_fp):
         utils.save_graphs(os.path.join(save_fp, f), graphs)
 
 
-def generate_spring_mass_graphs(save_fp, config, dynamic, seed):
+def generate_spring_mass_graphs(save_fp, config, dynamic, make_gif, seed):
     """
     Docstring for generate_spring_mass
     
@@ -81,12 +81,13 @@ def generate_spring_mass_graphs(save_fp, config, dynamic, seed):
             pos, vel, edges = sm.simulate()
         
         # saving animations
-        synthetic_utils.animate_system(
-            pos,
-            edges,
-            save_path=os.path.join(save_fp, 'gifs', f'trial_{i}.gif'),
-            force_field_radius=sm.force_field_size
-        )
+        if make_gif:
+            synthetic_utils.animate_system(
+                pos,
+                edges,
+                save_path=os.path.join(save_fp, 'gifs', f'trial_{i}.gif'),
+                force_field_radius=sm.force_field_size
+            )
 
         # save graphs
         state_vars = synthetic_utils.make_state_vars(pos, vel, edges=edges, dt=config['dt'])
@@ -114,12 +115,13 @@ if __name__ == '__main__':
     # )
 
     print('Creating spring mass system graphs')
-    
+
     # spring mass
     generate_spring_mass_graphs(
         save_fp='data/spring_mass/static_graph',
         config='configs/spring_mass_static_graph.yaml',
         dynamic=False,
+        make_gif=False,
         seed=12345
     )
 
@@ -128,5 +130,6 @@ if __name__ == '__main__':
         save_fp='data/spring_mass/dynamic_graph',
         config='configs/spring_mass_dynamic_graph.yaml',
         dynamic=True,
+        make_gif=False,
         seed=12345
     )
