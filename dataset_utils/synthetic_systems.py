@@ -12,6 +12,7 @@ class springMassSystem():
             n_masses=8,
             arena_size=1.0,
             force_field_proportion=0.85,
+            boundary_stiffness=1.0,
             spring_constant=0.5,
             damping_coef=0.07,
             init_vel_norm=1.0,
@@ -20,13 +21,16 @@ class springMassSystem():
             rng=np.random.default_rng()
     ):
         """
-        A vanilla mass spring system with a 'force field' that pushes masses 
+        A vanilla mass spring system with a 'force field' that pushes masses
         away from the boundary.
 
         :param n_masses: Number of masses
         :param arena_size: size of the arena
         :param force_field_proportion: proportion of the arena that has no
           force field
+        :param boundary_stiffness: controls sharpness of the soft boundary.
+          Higher values give a sharper transition (approaching hard boundary);
+          lower values give a more gradual transition. k=1 is plain softplus.
         :param spring_constant: spring constant for all springs
         :param init_loc_std: standard deviation of the initial positions of
           the masses
@@ -40,6 +44,7 @@ class springMassSystem():
         self.spring_constant = spring_constant
         self.damping_coef = damping_coef
         self.init_vel_norm = init_vel_norm
+        self.k = boundary_stiffness
         self.time = time
         self.dt = dt
         self.rng = rng
@@ -115,14 +120,11 @@ class springMassSystem():
             f_y = np.sum(-self.spring_constant * A * dist_y, axis=1)
             f_spring = np.stack([f_x, f_y], axis=0)
 
-            # force field force calculation (magnitude exponential wrt to distance from center)
+            # force field force calculation (softplus boundary: smooth, near-zero inside, grows outside)
+            # magnitude = (1/k) * log(1 + exp(k * (r - r0))); higher k -> sharper transition
             pos_norm = np.linalg.norm(pos_next, axis=0)
-            f_force_field = np.where(
-                pos_norm > self.force_field_size,
-                -pos_next,
-                0.
-            )
-            f_force_field = (f_force_field / (np.linalg.norm(f_force_field, axis=0) + self.eps)) * np.exp(np.linalg.norm(f_force_field, axis=0))
+            force_magnitude = np.logaddexp(0, self.k * (pos_norm - self.force_field_size)) / self.k
+            f_force_field = -force_magnitude * (pos_next / (pos_norm + self.eps))
 
             # damping force
             f_damping = -self.damping_coef * vel_next
@@ -147,6 +149,7 @@ class springMassDynamicEdges(springMassSystem):
             n_masses=8,
             arena_size=1.0,
             force_field_proportion=0.85,
+            boundary_stiffness=1.0,
             spring_constant=0.5,
             damping_coef=0.07,
             init_vel_norm=1.0,
@@ -155,7 +158,7 @@ class springMassDynamicEdges(springMassSystem):
             rng=np.random.default_rng()
     ):
         """
-        A mass spring system with a 'force field' that pushes masses 
+        A mass spring system with a 'force field' that pushes masses
         away from the boundary and has dynamicly changing spring positions
         over time.
 
@@ -164,6 +167,9 @@ class springMassDynamicEdges(springMassSystem):
         :param arena_size: size of the arena
         :param force_field_proportion: proportion of the arena that has no
           force field
+        :param boundary_stiffness: controls sharpness of the soft boundary.
+          Higher values give a sharper transition (approaching hard boundary);
+          lower values give a more gradual transition. k=1 is plain softplus.
         :param spring_constant: spring constant for all springs
         :param init_loc_std: standard deviation of the initial positions of
           the masses
@@ -176,6 +182,7 @@ class springMassDynamicEdges(springMassSystem):
             n_masses=n_masses,
             arena_size=arena_size,
             force_field_proportion=force_field_proportion,
+            boundary_stiffness=boundary_stiffness,
             spring_constant=spring_constant,
             damping_coef=damping_coef,
             init_vel_norm=init_vel_norm,
@@ -226,14 +233,11 @@ class springMassDynamicEdges(springMassSystem):
             f_y = np.sum(-self.spring_constant * A * dist_y, axis=1)
             f_spring = np.stack([f_x, f_y], axis=0)
 
-            # force field force calculation
+            # force field force calculation (softplus boundary: smooth, near-zero inside, grows outside)
+            # magnitude = (1/k) * log(1 + exp(k * (r - r0))); higher k -> sharper transition
             pos_norm = np.linalg.norm(pos_next, axis=0)
-            f_force_field = np.where(
-                pos_norm > self.force_field_size,
-                -pos_next,
-                0.
-            )
-            f_force_field = (f_force_field / (np.linalg.norm(f_force_field, axis=0) + self.eps)) * np.exp(np.linalg.norm(f_force_field, axis=0))
+            force_magnitude = np.logaddexp(0, self.k * (pos_norm - self.force_field_size)) / self.k
+            f_force_field = -force_magnitude * (pos_next / (pos_norm + self.eps))
 
             # damping force
             f_damping = -self.damping_coef * vel_next
