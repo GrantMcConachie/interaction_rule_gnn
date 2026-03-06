@@ -96,9 +96,10 @@ def evaluate_rollout(model, dataloader, writer, config, dataset, device):
         g_gt = dat[i].to(device)
         g = g.to(device)
 
-        # if using ground truth edges
+        # if using ground truth edges, update topology and recompute edge features
+        # from current predicted state so edge_attr stays consistent with edge_index
         if config['training']['gt_edges']:
-            g.edge_index = g_gt.gt_edge_index
+            g = utils.update_graph_edges(g, g_gt.gt_edge_index)
 
         out = model(g)
         g = utils.make_state_graph_acc(out, g)
@@ -120,7 +121,7 @@ def train(args):
     Main training function
     """
     # get device
-    device = torch.device(f'cuda' if torch.cuda.is_available() else "cpu")
+    device = torch.device(f'cuda' if torch.cuda.is_available() else 'cpu')
 
     # get config
     with open(args.config, 'r') as f:

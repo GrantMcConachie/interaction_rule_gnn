@@ -7,7 +7,7 @@
 #$ -m ea
 
 # Give job a name
-#$ -N GPS_spring_mass_rollout_val_real_gt_edges_pred_pos
+#$ -N GPS_spring_mass_gt_edges_pred_acc_no_rollout_val
 
 # Combine output and error files into a single file
 #$ -j y
@@ -32,4 +32,4 @@ echo "=========================================================="
 
 cd /projectnb/biochemai/Grant/interaction_rule_GNN
 source venv/bin/activate
-python scripts/train.py -c '/projectnb/biochemai/Grant/interaction_rule_GNN/configs/gps.yaml' -d '/projectnb/biochemai/Grant/interaction_rule_GNN/data/spring_mass/static_graph/graphs/trial_0.pkl' -sp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/GPS/model/real_gt_edges_rollout_vel_pred_pos' -lp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/GPS/logs/real_gt_edges_rollout_vel_pred_pos'
+python scripts/train.py -c '/projectnb/biochemai/Grant/interaction_rule_GNN/configs/gps.yaml' -d '/projectnb/biochemai/Grant/interaction_rule_GNN/data/spring_mass/static_graph/graphs/trial_0.pkl' -sp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/GPS/model/gt_edges_pred_acc_no_rollout_val' -lp '/projectnb/biochemai/Grant/interaction_rule_GNN/results/SpringMass/GPS/logs/gt_edges_pred_acc_no_rollout_val'

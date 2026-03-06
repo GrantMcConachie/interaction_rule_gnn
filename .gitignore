@@ -2,7 +2,8 @@
 data/
 bash_output/
 results/
-_dt_sweep_experiment
+_dt_sweep_experiment/
+_model_comparrison_fish/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

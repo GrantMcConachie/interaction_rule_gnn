@@ -201,7 +201,7 @@ class springMassDynamicEdges(springMassSystem):
         # Adjacency matrix is any within fov_angle degrees of heading
         fov_thresh = np.cos(self.fov_angle * np.pi/180 / 2)
         fov_mask = (np.abs(dot_prods) >= fov_thresh) & (dist_norm > 0.0)
-        A = fov_mask | fov_mask.T  # directed
+        A = fov_mask | fov_mask.T  # undirected
         np.fill_diagonal(A, 0)
 
         return A

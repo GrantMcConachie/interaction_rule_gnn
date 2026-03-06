@@ -108,13 +108,33 @@ def split_and_load_data(config, args):
     return train_dataloader, val_dataloader, test_dataloader
 
 
+def update_graph_edges(g, new_edge_index):
+    """
+    Recomputes edge features for a new edge topology using the graph's
+    current predicted positions and velocities. Mutates g in place.
+
+    :param g: current graph (with predicted pos/vel)
+    :param new_edge_index: new edge index to use
+    """
+    pos_norm = torch.linalg.norm(g.pos, dim=1)
+    _, edge_attr = utils.make_edge_and_nodes(
+        g.pos.cpu().detach().numpy(),
+        pos_norm.cpu().detach().numpy(),
+        g.vel.cpu().detach().numpy(),
+        new_edge_index.cpu().detach().numpy()
+    )
+    g.edge_index = new_edge_index
+    g.edge_attr = edge_attr.to(g.pos.device)
+    return g
+
+
 def make_state_graph_acc(model_output, current_graph):
     """
     Makes a single graph from a model prediction
     """
     dt = current_graph.dt
-    pos_pred = model_output * 1/2 * dt ** 2 + current_graph.vel * dt + current_graph.pos
     vel_pred = current_graph.vel + model_output * dt
+    pos_pred = current_graph.pos + vel_pred * dt
     pos_norm = torch.linalg.norm(pos_pred, dim=1)
     node_feats, edge_attr = utils.make_edge_and_nodes(
         pos_pred.cpu().detach().numpy(),
