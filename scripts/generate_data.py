@@ -10,22 +10,35 @@ import numpy as np
 from dataset_utils import synthetic_systems, synthetic_utils, fish_utils, utils
 
 
-def generate_fish_graphs(fp, save_fp):
+def generate_fish_graphs(fp, save_fp, make_gif=False, smooth=False):
     """
-    Gets location data out of the raw files and saves them as pkl files
+    Gets location data out of the raw files and saves them as pkl files.
+    Saves a GIF animation for the first file only.
     """
     # list files
-    fish_files = os.listdir(fp)
+    fish_files = sorted(os.listdir(fp))
 
     # loop though files
-    for f in fish_files:
+    for i, f in enumerate(fish_files):
         fish_h5 = h5py.File(os.path.join(fp, f))
 
         # take out location data
         fish_hdf = fish_h5['tracks']
 
         # generate state vectors
-        state_vectors = fish_utils.generate_x_dot(fish_hdf)
+        state_vectors = fish_utils.generate_x_dot(fish_hdf, smooth=smooth)
+
+        # save a gif for the first file only
+        if i == 0 and make_gif:
+            print('generating fish gif')
+            os.makedirs(os.path.join(save_fp, '..', 'gifs'), exist_ok=True)
+            gif_name = f.replace('.h5', '.gif')
+            fish_utils.animate_fish(
+                state_vectors,
+                save_path=os.path.join(save_fp, '..', 'gifs', gif_name),
+                smooth_status=smooth
+            )
+            print('fish gif saved')
 
         # generate graphs
         graphs = utils.generate_graphs(state_vectors)
@@ -102,34 +115,38 @@ def generate_spring_mass_graphs(save_fp, config, dynamic, make_gif, seed):
 if __name__ == '__main__':
     # print('Creating fish graphs')
 
-    # # 8 fish
-    # generate_fish_graphs(
-    #     fp='data/fish/raw data/8fish',
-    #     save_fp='data/fish/processed/8fish'
-    # )
-
-    # # 10 fish
-    # generate_fish_graphs(
-    #     fp='data/fish/raw data/10fish/DATA',
-    #     save_fp='data/fish/processed/10fish'
-    # )
-
-    print('Creating spring mass system graphs')
-
-    # spring mass
-    generate_spring_mass_graphs(
-        save_fp='data/spring_mass/static_graph',
-        config='configs/spring_mass_static_graph.yaml',
-        dynamic=False,
-        make_gif=False,
-        seed=12345
+    # 8 fish
+    generate_fish_graphs(
+        fp='data/fish/raw data/8fish',
+        save_fp='data/fish/processed/8fish',
+        make_gif=True,
+        smooth=True
     )
 
-    # dynamic spring mass
-    generate_spring_mass_graphs(
-        save_fp='data/spring_mass/dynamic_graph',
-        config='configs/spring_mass_dynamic_graph.yaml',
-        dynamic=True,
-        make_gif=False,
-        seed=12345
+    # 10 fish
+    generate_fish_graphs(
+        fp='data/fish/raw data/10fish/DATA',
+        save_fp='data/fish/processed/10fish',
+        make_gif=True,
+        smooth=True
     )
+
+    # print('Creating spring mass system graphs')
+
+    # # spring mass
+    # generate_spring_mass_graphs(
+    #     save_fp='data/spring_mass/static_graph',
+    #     config='configs/spring_mass_static_graph.yaml',
+    #     dynamic=False,
+    #     make_gif=False,
+    #     seed=12345
+    # )
+
+    # # dynamic spring mass
+    # generate_spring_mass_graphs(
+    #     save_fp='data/spring_mass/dynamic_graph',
+    #     config='configs/spring_mass_dynamic_graph.yaml',
+    #     dynamic=True,
+    #     make_gif=False,
+    #     seed=12345
+    # )

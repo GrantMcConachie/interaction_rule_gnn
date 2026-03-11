@@ -16,5 +16,5 @@ training:
   val_split: 0.1  # percentage of data in the validation split
   gt_edges: True  # whether to train with ground truth edges or not
   validate_with_rollout: False
-  downsample_timestep: 256  # 1 indicates no downsampling
+  downsample_timestep: 1  # 1 indicates no downsampling
   pred_pos: False
