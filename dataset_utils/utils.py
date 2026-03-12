@@ -27,15 +27,21 @@ def make_fc_edge_idx(num_nodes):
     )
 
 
-def make_edge_and_nodes(pos, pos_norm, vel, edge_index, eps=1e-16, wall_thresh=0.3):
+def make_edge_and_nodes(pos, pos_norm, vel, edge_index, wall_thresh=0.3):
     """
     generates edge and node features from position
     """
-    # node features (velocity unit vector and distance to wall with threshold)
-    dist_from_wall = np.ones_like(pos_norm) - pos_norm
-    dist_from_wall_thresh = np.where(dist_from_wall < wall_thresh, pos_norm, 0.)
+    ## node features (velocity unit vector and distance to wall with threshold)
+    # dist_from_wall = np.ones_like(pos_norm) - pos_norm
+    # dist_from_wall_thresh = np.where(dist_from_wall < wall_thresh, pos_norm, 0.)
+    # node_feats = torch.tensor(
+    #     np.append(vel, dist_from_wall_thresh[:,None], axis=1),
+    #     dtype=torch.float
+    # )
+
+    # trying to just use pos norm instead of a threshold
     node_feats = torch.tensor(
-        np.append(vel, dist_from_wall_thresh[:,None], axis=1),
+        np.append(vel, pos_norm[:, None], axis=1),
         dtype=torch.float
     )
 

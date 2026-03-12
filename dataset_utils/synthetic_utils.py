@@ -27,11 +27,12 @@ def make_state_vars(pos, vel, edges, dt, save_fp=None):
     return state_vars
 
 
-def plot_trajectories(p_t, save_path=None, A=None, arena_radius=1.0, force_field_radius=None, step=10):
+def plot_trajectories(p_t, save_path=None, A=None, arena_radius=1.0, force_field_radius=None, step=1, ax=None):
     # p_t: (2, n, T), A: (n, n)
     n = p_t.shape[1]
     T = p_t.shape[2]
-    fig, ax = plt.subplots(figsize=(6, 6))
+    if ax is None:
+        _, ax = plt.subplots(figsize=(6, 6))
     ax.add_patch(Circle((0, 0), arena_radius, edgecolor='black', facecolor='none', lw=1.5))
     if force_field_radius is not None:
         ax.add_patch(Circle((0, 0), force_field_radius, edgecolor='orange', facecolor='none', ls='--', lw=1))
