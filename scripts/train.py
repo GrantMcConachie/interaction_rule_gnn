@@ -128,7 +128,10 @@ def train(args):
         config = yaml.safe_load(f)
 
     # load data and split
-    train_dataloader, val_dataloader, test_dataloader = utils.split_and_load_data(config, args)
+    if config['model']['gnn_type'] == 'NRI':
+        train_dataloader, val_dataloader, test_dataloader = utils.split_and_load_data_NRI(config, args)
+    else:
+        train_dataloader, val_dataloader, test_dataloader = utils.split_and_load_data(config, args)
 
     # tensorboard log
     dataset = os.path.basename(args.dataset).replace('.pkl', '')

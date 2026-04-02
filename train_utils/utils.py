@@ -108,6 +108,17 @@ def split_and_load_data(config, args):
     return train_dataloader, val_dataloader, test_dataloader
 
 
+def split_and_load_data_NRI(config, args):
+    """
+    Unique datasplit and dataloader for the NRI model.
+    """
+    # load data
+    with open(args.dataset, 'rb') as f:
+        data = pkl.load(f)
+
+    # TODO: make the dataloader from the NRI model
+
+
 def update_graph_edges(g, new_edge_index):
     """
     Recomputes edge features for a new edge topology using the graph's
