@@ -1,0 +1,48 @@
+model:
+  gnn_type: "SwitchingNRI"
+
+  # --- PyG MPNN encoder ---
+  encoder_hidden: 256        # hidden dim for node/edge projections and MPNN
+  encoder_dropout: 0.5
+  factor: true               # if true, runs two MPNN passes per step (factor-graph style)
+
+  # --- GRU temporal smoother ---
+  gru_layers: 1              # GRU depth; dropout applied between layers when >1
+
+  # --- Decoder ---
+  decoder_hidden: 256
+  decoder_dropout: 0.5
+  skip_first: false          # if true, edge type 0 is treated as 'no edge' (msgs zeroed)
+
+  # --- Graph structure ---
+  edge_types: 2              # 2 = edge / no-edge binary
+
+  # --- Gumbel-Softmax ---
+  temp: 0.5                  # temperature; anneal toward 0 for harder samples
+  hard: false                # straight-through estimator if true
+
+  # --- Switching cost ---
+  # Penalises ||prob_t - prob_{t-1}||^2 summed over edges and timesteps.
+  # 0.0  = no penalty (free to switch every step)
+  # >0.0 = sticky prior (higher = more reluctant to change graphs)
+  lambda_switch: 0.1
+
+training:
+  lr: 0.0001
+  batch_size: 32
+  epochs: 300
+  test_split: 0.2
+  val_split: 0.1
+  gt_edges: false            # SwitchingNRI infers its own graph — gt_edges unused
+  validate_with_rollout: false
+  downsample_timestep: 1
+
+  # --- Context window (must be >1 for SwitchingNRI to be meaningful) ---
+  past_window: 10            # T: number of past timesteps fed as input context
+  future_window: 1           # windowing step needs this; SwitchingNRI loss uses T-1 within-context targets
+
+  # --- Loss weights ---
+  kl_weight: 1.0             # β in: L = recon + β·KL + switching_cost
+
+  # Unused by SwitchingNRI but present so split_and_load_data doesn't error
+  pred_pos: false

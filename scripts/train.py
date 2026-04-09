@@ -10,6 +10,7 @@ import pickle as pkl
 from tqdm import tqdm
 
 import torch
+import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from models import models
@@ -25,17 +26,59 @@ def set_seed(seed=0):
 
 def pos_loss_fn(output, g):
     """
-    Loss that uses next position as target rather than acceleration
+    Loss that uses future positions as targets rather than acceleration.
+    Supports multi-step prediction via autoregressive Euler integration.
 
-    :param output: model output (acceleration)
-    :param g: current graph
+    :param output: model output, shape [N, future_window * 2] (accelerations)
+    :param g: current graph with pos_future [N, future_window * 2]
     """
-    # euler integration for next position
-    dt = torch.mean(g.dt)  # to make it a scalar
-    pos_pred = output * 1/2 * dt ** 2 + g.vel * dt + g.pos
-    loss = torch.nn.functional.mse_loss(pos_pred, g.pos_next)
+    dt = torch.mean(g.dt)  # scalar
+    future_window = output.shape[1] // 2
+    acc_pred = output.view(-1, future_window, 2)          # [N, H, 2]
+    pos_target = g.pos_future.view(-1, future_window, 2)  # [N, H, 2]
 
-    return loss
+    total_loss = 0.0
+    pos_curr = g.pos
+    vel_curr = g.vel
+    for k in range(future_window):
+        a = acc_pred[:, k, :]
+        pos_curr = a * 0.5 * dt ** 2 + vel_curr * dt + pos_curr
+        vel_curr = vel_curr + a * dt
+        total_loss += torch.nn.functional.mse_loss(pos_curr, pos_target[:, k, :])
+
+    return total_loss / future_window
+
+
+def switching_nri_loss(preds, prob, logits, g, model, beta):
+    """
+    Combined loss for SwitchingNRIModel.
+
+    :param preds:  [N, T-1, node_step_dim]  within-context next-state predictions
+    :param prob:   [E, T, edge_types]        soft edge-type probabilities
+    :param logits: [E, T, edge_types]        smoothed logits (for switching cost)
+    :param g:      current graph batch
+    :param model:  SwitchingNRIModel instance (for dims and lambda_switch)
+    :param beta:   KL weight
+    :return:       scalar loss, (recon, kl, switch) for logging
+    """
+    T         = model.past_window
+    node_dim  = model.node_step_dim
+
+    # Ground-truth within-context targets: state at t+1 for each t in [0, T-2]
+    x_seq  = g.x.view(-1, T, node_dim)   # [N, T, node_dim]
+    target = x_seq[:, 1:, :]             # [N, T-1, node_dim]
+
+    recon_loss = F.mse_loss(preds, target)
+
+    # KL(Categorical(prob_t) || Uniform(1/K)), summed over edges and timesteps
+    K = model.edge_types
+    log_uniform = -torch.log(torch.tensor(K, dtype=torch.float, device=prob.device))
+    kl_loss = (prob * (torch.log(prob + 1e-8) + log_uniform)).sum(-1).mean()
+
+    switch_loss = model.switching_loss(logits)
+
+    total = recon_loss + beta * kl_loss + switch_loss
+    return total, (recon_loss.item(), kl_loss.item(), switch_loss.item())
 
 
 def evaluate(model, dataloader, loss_fn, config, device):
@@ -61,7 +104,7 @@ def evaluate(model, dataloader, loss_fn, config, device):
         if config['training']['pred_pos']:
             loss = loss_fn(out, g)
         else:
-            loss = loss_fn(out, g.acc)
+            loss = loss_fn(out, g.acc_future)
 
         running_loss.append(loss.item())
     
@@ -70,8 +113,11 @@ def evaluate(model, dataloader, loss_fn, config, device):
 
 def evaluate_rollout(model, dataloader, writer, config, dataset, device):
     """
-    Evaluate how well the model does on rollout prediction
-    
+    Evaluate how well the model does on rollout prediction.
+    Maintains a rolling buffer of `past_window` recent graphs to feed as
+    context input. Only the first predicted future step is used to advance
+    the rollout state.
+
     :param model: trained model
     :param dataloader: dataloader to evaluate model on
     :param device: device
@@ -80,37 +126,44 @@ def evaluate_rollout(model, dataloader, writer, config, dataset, device):
     pred_pos = []
     loss_roll = []
     step = config['training']['downsample_timestep']
+    past_window = config['training'].get('past_window', 1)
+    future_window = config['training'].get('future_window', 1)
 
-    # initial graph
     dat = list(dataloader)
-    g = dat[0]
-    pred_pos.append(g.pos.detach().cpu())
+    pred_pos.append(dat[0].pos.detach().cpu())
 
+    # Seed the rolling buffer with real data for the first past_window frames
+    buf = [dat[j].to(device) for j in range(min(past_window, len(dat)))]
     if config['training']['gt_edges']:
-        g.edge_index = g.gt_edge_index
-        g.edge_attr = g.gt_edge_attr
+        for g in buf:
+            g.edge_index = g.gt_edge_index
+            g.edge_attr = g.gt_edge_attr
 
-    # loop through range of dataloader
-    i = 0
+    i = past_window - 1
     while i + step < len(dat):
         g_gt = dat[i].to(device)
-        g = g.to(device)
 
-        # if using ground truth edges, update topology and recompute edge features
-        # from current predicted state so edge_attr stays consistent with edge_index
-        if config['training']['gt_edges']:
-            g = utils.update_graph_edges(g, g_gt.gt_edge_index)
+        # Build windowed input from rolling buffer
+        g_in = utils.build_windowed_input(buf, g_gt, config).to(device)
 
-        out = model(g)
-        g = utils.make_state_graph_acc(out, g)
-        loss = torch.nn.functional.mse_loss(g.pos, g_gt.pos_next)
-        pred_pos.append(g.pos.detach().cpu())
+        out = model(g_in)
+
+        # Extract only the first future-step acceleration [N, 2]
+        acc_first = out[:, :2]
+
+        # Advance state from the last buffer entry
+        g_next = utils.make_state_graph_acc(acc_first, buf[-1])
+        loss = torch.nn.functional.mse_loss(g_next.pos, g_gt.pos_next)
+        pred_pos.append(g_next.pos.detach().cpu())
         loss_roll.append(loss.item())
 
         if writer is not None and dataset == "test":
             writer.add_scalar("test/rollout_loss", loss.item(), i)
 
-        # advance graph by step
+        # Update rolling buffer: drop oldest, append newest predicted graph
+        buf.pop(0)
+        buf.append(g_next)
+
         i += step
 
     return pred_pos, sum(loss_roll) / len(loss_roll)
@@ -172,7 +225,7 @@ def train(args):
             if config['training']['pred_pos']:
                 loss = loss_fn(out, g)
             else:
-                loss = loss_fn(out, g.acc)
+                loss = loss_fn(out, g.acc_future)
 
             loss.backward()
             opt.step()

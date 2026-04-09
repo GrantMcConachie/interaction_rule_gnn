@@ -5,6 +5,7 @@ results/
 _dt_sweep_experiment/
 _model_comparrison_fish/
 TODO.txt
+claude_plans/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

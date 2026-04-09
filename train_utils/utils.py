@@ -63,6 +63,84 @@ def downsample_data(data, step):
     return data[:new_len]
 
 
+def create_windowed_samples(graphs, past_window, future_window):
+    """
+    Creates windowed training samples from a list of single-timestep graphs.
+
+    Each sample concatenates node and edge features from the last `past_window`
+    timesteps as input, and stores the next `future_window` positions and
+    accelerations as prediction targets.
+
+    :param graphs: list of single-timestep Data objects
+    :param past_window: number of past timesteps to use as input context
+    :param future_window: number of future timesteps to predict
+    :return: list of windowed Data objects
+    """
+    windowed = []
+    total = len(graphs)
+    for t in range(past_window - 1, total - future_window):
+        past = graphs[t - past_window + 1: t + 1]  # list of past_window graphs
+        curr = graphs[t]
+
+        # Concatenate past node/edge features along the feature dim (oldest→newest)
+        x = torch.cat([g.x for g in past], dim=1)
+        edge_attr = torch.cat([g.edge_attr for g in past], dim=1)
+
+        # Future targets flattened to [N, future_window * 2]
+        pos_future = torch.cat(
+            [graphs[t + k + 1].pos for k in range(future_window)], dim=1
+        )
+        acc_future = torch.cat(
+            [graphs[t + k].acc for k in range(future_window)], dim=1
+        )
+
+        new_g = Data(
+            x=x,
+            edge_attr=edge_attr,
+            edge_index=curr.edge_index,
+            pos=curr.pos,
+            vel=curr.vel,
+            acc=curr.acc,
+            pos_future=pos_future,
+            acc_future=acc_future,
+            pos_next=graphs[t + 1].pos,  # kept for rollout compatibility
+            dt=curr.dt,
+            t=curr.t,
+        )
+        if hasattr(curr, 'gt_edge_index') and curr.gt_edge_index is not None:
+            new_g.gt_edge_index = curr.gt_edge_index
+            new_g.gt_edge_attr = curr.gt_edge_attr
+        windowed.append(new_g)
+    return windowed
+
+
+def build_windowed_input(buf, curr_g, config):
+    """
+    Builds a single windowed graph from a rolling buffer of recent graphs.
+    Used during rollout evaluation to construct model input on-the-fly.
+
+    :param buf: list of the most recent `past_window` Data objects
+    :param curr_g: the ground-truth graph at the current timestep (for gt edges)
+    :param config: training config dict
+    :return: a single Data object with concatenated past features
+    """
+    x = torch.cat([g.x for g in buf], dim=1)
+    edge_attr = torch.cat([g.edge_attr for g in buf], dim=1)
+    latest = buf[-1]
+    g_in = Data(
+        x=x,
+        edge_attr=edge_attr,
+        edge_index=latest.edge_index,
+        pos=latest.pos,
+        vel=latest.vel,
+        dt=latest.dt,
+    )
+    if config['training']['gt_edges'] and hasattr(curr_g, 'gt_edge_index'):
+        g_in.gt_edge_index = curr_g.gt_edge_index
+        g_in.gt_edge_attr = curr_g.gt_edge_attr
+    return g_in
+
+
 def split_and_load_data(config, args):
     """
     Loads in the dataset of interest and splits the data    
@@ -74,6 +152,12 @@ def split_and_load_data(config, args):
     # downsample
     if config['training']['downsample_timestep'] != 1:
         data = downsample_data(data, config['training']['downsample_timestep'])
+
+    # apply context windowing
+    past_window = config['training'].get('past_window', 1)
+    future_window = config['training'].get('future_window', 1)
+    if past_window > 1 or future_window > 1:
+        data = create_windowed_samples(data, past_window, future_window)
 
     # split
     dat_train, dat_val, dat_test = split_with_config(data, config)

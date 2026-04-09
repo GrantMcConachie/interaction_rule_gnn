@@ -18,3 +18,5 @@ training:
   validate_with_rollout: False
   downsample_timestep: 256  # 1 indicates no downsampling
   pred_pos: True
+  past_window: 5    # number of past timesteps concatenated as node/edge features
+  future_window: 5  # number of future timesteps to predict
