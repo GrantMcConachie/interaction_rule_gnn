@@ -1,0 +1,1 @@
+data at /projectnb/biochemai/Grant/interaction_rule_GNN/data
